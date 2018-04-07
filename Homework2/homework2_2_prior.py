@@ -16,7 +16,7 @@ train_label_positive = np.array([int(i == 1) for i in train_label])
 train_label_indifference = np.array([int(i == 0) for i in train_label])
 train_label_negative = np.array([int(i == -1) for i in train_label])
 
-
+0
 # positive svm divide
 posi_1_a_index = []
 posi_1_b_index = []
