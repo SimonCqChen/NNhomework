@@ -60,7 +60,7 @@ def inference(input_tensor, train, regularizer):
 
     pool_shape = pool2.get_shape().as_list()
     nodes = pool_shape[1] * pool_shape[2] * pool_shape[3]
-    reshaped = tf.reshape(pool2, [BATCH_SIZE, nodes])
+    reshaped = tf.reshape(pool2, [pool_shape[0], nodes])
 
     with tf.variable_scope('layer5_fc1'):
         fc1_weights = tf.get_variable(
@@ -94,6 +94,7 @@ def inference(input_tensor, train, regularizer):
 
 BATCH_SIZE = 100
 LEARNING_RATE_BASE = 0.8
+LEARNING_RATE = 0.05
 LEARNING_RATE_DECAY = 0.99
 REGULARIZATION_RATE = 0.0001
 TRAINING_STEPS = 30000
@@ -127,7 +128,7 @@ def train(mnist):
         mnist.train.num_examples / BATCH_SIZE,
         LEARNING_RATE_DECAY
     )
-    train_step = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss, global_step=global_step)
+    train_step = tf.train.GradientDescentOptimizer(LEARNING_RATE).minimize(loss, global_step=global_step)
     with tf.control_dependencies([train_step, variable_averages_op]):
         train_op = tf.no_op(name='train')
 
@@ -153,13 +154,10 @@ def train(mnist):
                 saver.save(sess, os.path.join('./', MODEL_NAME))
 
 
-mnist = input_data.read_data_sets("/tmp/data", one_hot=True)
-train(mnist)
-
-
 def evaluate(mnist):
+    VALI_SIZE = mnist.validation.images.shape[0]
     x = tf.placeholder(tf.float32, [
-        None,
+        VALI_SIZE,
         IMAGE_SIZE,
         IMAGE_SIZE,
         NUM_CHANNELS
@@ -177,7 +175,7 @@ def evaluate(mnist):
     with tf.Session() as sess:
         ckpt = tf.train.get_checkpoint_state('./')
         if ckpt and ckpt.model_checkpoint_path:
-            xs, ys = mnist.train.validation.images, mnist.train.validation.labels
+            xs, ys = mnist.validation.images, mnist.validation.labels
             xs = np.reshape(xs, (xs.shape[0],
                                  IMAGE_SIZE,
                                  IMAGE_SIZE,
@@ -186,3 +184,8 @@ def evaluate(mnist):
             global_step = ckpt.model_checkpoint_path.split('/')[-1].split('/')[-1]
             accuracy_score = sess.run(accuracy, feed_dict={x: xs, y_: ys})
             print("accuracy: %g" % accuracy_score)
+
+
+mnist = input_data.read_data_sets("/tmp/data", one_hot=True)
+# train(mnist)
+evaluate(mnist)
