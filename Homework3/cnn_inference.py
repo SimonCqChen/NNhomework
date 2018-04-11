@@ -3,6 +3,8 @@ import tensorflow as tf
 import numpy as np
 import os
 import struct
+
+import time
 from tensorflow.examples.tutorials.mnist import input_data
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
@@ -21,6 +23,8 @@ CONV2_SIZE = 5
 
 FC_SIZE = 512
 
+log_dir = './MNIST_LOG'
+
 
 def inference(input_tensor, train, regularizer):
     with tf.variable_scope('layer_conv1'):
@@ -32,7 +36,8 @@ def inference(input_tensor, train, regularizer):
 
         conv1 = tf.nn.conv2d(input_tensor, conv1_weights, strides=[1, 1, 1, 1], padding='SAME')
         relu1 = tf.nn.relu(tf.nn.bias_add(conv1, conv1_bias))
-
+        image_shaped_input = tf.reshape(relu1, [-1, 28, 28, 1])
+        tf.summary.image('input', image_shaped_input, 10)
     with tf.variable_scope('layer2_pool1'):
         pool1 = tf.nn.max_pool(
             relu1, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME'
@@ -149,7 +154,7 @@ def train(mnist):
                                  NUM_CHANNELS))
 
             _, loss_value, step = sess.run([train_op, loss, global_step], feed_dict={x: xs, y_: ys})
-            if i % 100 == 0:
+            if i % 200 == 0:
                 print("after %d steps, loss on training batch is %g" % (step, loss_value))
                 saver.save(sess, os.path.join('./', MODEL_NAME))
 
@@ -186,6 +191,45 @@ def evaluate(mnist):
             print("accuracy: %g" % accuracy_score)
 
 
+def visualize(minst):
+    x = tf.placeholder(tf.float32, [
+        1,
+        IMAGE_SIZE,
+        IMAGE_SIZE,
+        NUM_CHANNELS
+    ], name='x-input')
+    y_ = tf.placeholder(tf.float32, [None, OUTPUT_NODE], name='y-input')
+    y = inference(x, False, None)
+    correct_prediction = tf.equal(tf.argmax(y, 1), tf.argmax(y_, 1))
+    accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+    variable_averages = tf.train.ExponentialMovingAverage(
+        MOVING_AVERAGE_DECAY
+    )
+    variables_to_restore = variable_averages.variables_to_restore()
+    saver = tf.train.Saver(variables_to_restore)
+    merged = tf.summary.merge_all()
+    test_writer = tf.summary.FileWriter(log_dir + '/test')
+
+
+    with tf.Session() as sess:
+        ckpt = tf.train.get_checkpoint_state('./')
+        if ckpt and ckpt.model_checkpoint_path:
+            xs, ys = mnist.validation.images[0:1], mnist.validation.labels[0:1]
+            xs = np.reshape(xs, (1,
+                                 IMAGE_SIZE,
+                                 IMAGE_SIZE,
+                                 NUM_CHANNELS))
+            saver.restore(sess, ckpt.model_checkpoint_path)
+
+            global_step = ckpt.model_checkpoint_path.split('/')[-1].split('/')[-1]
+            summary, accuracy_score = sess.run([merged, accuracy], feed_dict={x: xs, y_: ys})
+            test_writer.add_summary(summary)
+            print("accuracy: %g" % accuracy_score)
+            test_writer.close()
+
 mnist = input_data.read_data_sets("/tmp/data", one_hot=True)
+# start_time = time.time()
 # train(mnist)
-evaluate(mnist)
+# print("training time: %g" % time.time() - start_time)
+# evaluate(mnist)
+visualize(mnist)

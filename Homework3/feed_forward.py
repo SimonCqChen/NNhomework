@@ -3,6 +3,7 @@ import tensorflow as tf
 
 import struct
 import os
+import time
 import operator
 from functools import reduce
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
@@ -70,6 +71,8 @@ def loadLabelSet(which=0):
 
 img = loadImageSet()
 label = loadLabelSet()
+img_test = loadImageSet(1)
+label_test = loadLabelSet(1)
 
 sess = tf.Session()
 
@@ -117,6 +120,8 @@ accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
 sess.run(tf.global_variables_initializer())
 
+start_time = time.time()
+
 for i in range(5000):
     batch_size = 1500
     start = i * batch_size
@@ -134,3 +139,8 @@ for i in range(5000):
     if (i+1) % 1000 == 0:
         test_accuracy = sess.run(accuracy, feed_dict={X_: img, y_: label})
         print("= " * 10, "step %d, testing acc %g" % (i+1, test_accuracy))
+end_time = time.time()
+print("time: %s" % str(end_time - start_time))
+train_accuracy = sess.run(accuracy, feed_dict={X_: img_test, y_: label_test})
+print("final acc %g" % train_accuracy)
+
