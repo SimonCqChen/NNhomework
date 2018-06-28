@@ -28,8 +28,10 @@ def read_data():
             stop_words.append(line[:-1])
             line = f.readline()
     stop_words = set(stop_words)
+    print('number of stop words', len(stop_words))
 
     raw_word_list = []
+    char_num = 0
     with open('doupocangqiong.txt', "r", encoding='UTF-8') as f:
         line = f.readline()
         while line:
@@ -38,9 +40,11 @@ def read_data():
             while ' ' in line:
                 line = line.replace(' ', '')
             if len(line) > 0:  # 如果句子非空
+                char_num = char_num + len(line)
                 raw_words = list(jieba.cut(line, cut_all=False))
                 raw_word_list.extend(raw_words)
             line = f.readline()
+    print("char size", char_num)
     return raw_word_list
 
 
@@ -167,13 +171,14 @@ with graph.as_default():
     init = tf.global_variables_initializer()
 
 # Step 5: Begin training.
-num_steps = 3000000
+num_steps = 2000000
 
 with tf.Session(graph=graph) as session:
     # We must initialize all variables before we use them.
     init.run()
     print("Initialized")
-
+    loss_line = open('loss.csv', 'w')
+    loss_line.write('step,average loss\n')
     average_loss = 0
     for step in xrange(num_steps):
         batch_inputs, batch_labels = generate_batch(batch_size, num_skips, skip_window)
@@ -189,6 +194,8 @@ with tf.Session(graph=graph) as session:
                 average_loss /= 2000
             # The average loss is an estimate of the loss over the last 2000 batches.
             print("Average loss at step ", step, ": ", average_loss)
+            if step % 100000 == 0:
+                loss_line.write(str(step) + ',' + str(average_loss) + '\n')
             average_loss = 0
 
         # Note that this is expensive (~20% slowdown if computed every 500 steps)
@@ -203,6 +210,8 @@ with tf.Session(graph=graph) as session:
                     close_word = reverse_dictionary[nearest[k]]
                     log_str = "%s %s," % (log_str, close_word)
                 print(log_str)
+
+    loss_line.close()
     final_embeddings = normalized_embeddings.eval()
 
 
