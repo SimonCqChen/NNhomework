@@ -16,11 +16,17 @@ from sklearn.manifold import TSNE
 import matplotlib.pyplot as plt
 from matplotlib.font_manager import FontProperties
 
+batch_size = 128
+embedding_size = 128
+skip_window = 1
+num_skips = 2
+valid_size = 8      # len(valid_word)
+valid_window = 100
+num_sampled = 64    # Number of negative examples to sample.
+
+
 # Read the data into a list of strings.
 def read_data():
-    """
-    读取中文语料库，分词之后把语料库中出现的所有词按顺序放在list中
-    """
     stop_words = []
     with open('stop_words.txt', "r", encoding="UTF-8") as f:
         line = f.readline()
@@ -52,7 +58,7 @@ def read_data():
 words = read_data()
 print('Data size', len(words))
 
-# Step 2: Build the dictionary and replace rare words with UNK token.
+# Step 2: 构建词典，将低频词替换为UNK标识
 vocabulary_size = 50000
 
 
@@ -84,8 +90,12 @@ print('Sample data', data[:10], [reverse_dictionary[i] for i in data[:10]])
 
 data_index = 0
 
+# 验证集
+valid_words = ['萧炎', '灵魂', '火焰', '战斗', '天阶', "云岚宗", "乌坦城", "惊诧"]
+valid_examples = [dictionary[li] for li in valid_words]
 
-# Step 3: Function to generate a training batch for the skip-gram model.
+
+# Step 3: 生成minibatch
 def generate_batch(batch_size, num_skips, skip_window):
     global data_index
     assert batch_size % num_skips == 0
@@ -115,19 +125,7 @@ batch, labels = generate_batch(batch_size=8, num_skips=2, skip_window=1)
 for i in range(8):
     print(batch[i], reverse_dictionary[batch[i]],'->', labels[i, 0], reverse_dictionary[labels[i, 0]])
 
-# Step 4: Build and train a skip-gram model.
-batch_size = 128
-embedding_size = 128  
-skip_window = 1       
-num_skips = 2         
-valid_size = 8      # len(valid_word)
-valid_window = 100  
-num_sampled = 64    # Number of negative examples to sample.
-
-# 验证集
-valid_word = ['萧炎', '灵魂', '火焰', '战斗', '天阶', "云岚宗", "乌坦城", "惊诧"]
-valid_examples = [dictionary[li] for li in valid_word]
-
+# Step 4: 构建skip-gram模型，并进行训练
 graph = tf.Graph()
 with graph.as_default():
     # Input data.
@@ -170,14 +168,15 @@ with graph.as_default():
     # Add variable initializer.
     init = tf.global_variables_initializer()
 
-# Step 5: Begin training.
+# Step 5: 训练
 num_steps = 2000000
 
 with tf.Session(graph=graph) as session:
     # We must initialize all variables before we use them.
     init.run()
     print("Initialized")
-    loss_line = open('loss.csv', 'w')
+    loss_line = open('loss2.csv', 'w')
+    valid_result = open('valid.txt', 'w')
     loss_line.write('step,average loss\n')
     average_loss = 0
     for step in xrange(num_steps):
@@ -194,51 +193,25 @@ with tf.Session(graph=graph) as session:
                 average_loss /= 2000
             # The average loss is an estimate of the loss over the last 2000 batches.
             print("Average loss at step ", step, ": ", average_loss)
-            if step % 100000 == 0:
+            if step % 10000 == 0 and step < 100000:
                 loss_line.write(str(step) + ',' + str(average_loss) + '\n')
             average_loss = 0
 
         # Note that this is expensive (~20% slowdown if computed every 500 steps)
-        if step % 10000 == 0:
+        if step % 20000 == 0:
             sim = similarity.eval()
             for i in xrange(valid_size):
                 valid_word = reverse_dictionary[valid_examples[i]]
                 top_k = 8  # number of nearest neighbors
                 nearest = (-sim[i, :]).argsort()[:top_k]
-                log_str = "Nearest to %s:" % valid_word
+                log_str = valid_word + ':'
                 for k in xrange(top_k):
                     close_word = reverse_dictionary[nearest[k]]
-                    log_str = "%s %s," % (log_str, close_word)
+                    log_str = log_str + close_word + ','
                 print(log_str)
+                valid_result.write(log_str + '\n')
 
+    valid_result.close()
     loss_line.close()
     final_embeddings = normalized_embeddings.eval()
-
-
-# Step 6: Visualize the embeddings.
-def plot_with_labels(low_dim_embs, labels, filename='tsne3.png',fonts=None):
-    assert low_dim_embs.shape[0] >= len(labels), "More labels than embeddings"
-    plt.figure(figsize=(18, 18))  # in inches
-    for i, label in enumerate(labels):
-        x, y = low_dim_embs[i, :]
-        plt.scatter(x, y)
-        plt.annotate(label,
-                     fontproperties=fonts,
-                     xy=(x, y),
-                     xytext=(5, 2),
-                     textcoords='offset points',
-                     ha='right',
-                     va='bottom')
-
-    plt.savefig(filename, dpi=800)
-
-
-# 为了在图片上能显示出中文
-font = FontProperties(fname=r"c:\windows\fonts\simsun.ttc", size=14)
-
-tsne = TSNE(perplexity=30, n_components=2, init='pca', n_iter=5000)
-plot_only = 500
-low_dim_embs = tsne.fit_transform(final_embeddings[:plot_only, :])
-labels = [reverse_dictionary[i] for i in xrange(plot_only)]
-plot_with_labels(low_dim_embs, labels, fonts=font)
 
